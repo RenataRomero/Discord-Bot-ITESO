@@ -29,59 +29,72 @@ var voiceChannel = null;
 
 var myip = require('quick-local-ip');
 
-//Login al server
+//Login to discord server
 client.login(discord_token);
 
+//If bot is logged and on
 client.on('message', function (message) {
 
-    const member = message.member;
-    const mess = message.content.toLowerCase();
+    const member = message.member; //The person who sends the message on de discord server.
+    const mess = message.content.toLowerCase(); //The message content.
 
-    const args = message.content.slice(prefix.length).trim().split(/ +/g);
-    const argsMusic = message.content.split(' ').slice(1).join("");
-    const command = args.shift().toLowerCase();
+    const args = message.content.slice(prefix.length).trim().split(/ +/g); //We get the arguements of the command.
+    const argsMusic = message.content.split(' ').slice(1).join(""); //The command to play music needs less arguements.
+    const command = args.shift().toLowerCase(); //The command itself.
 
+    //If command is play, you play music.
     if (command === "play") {
 
+        //The member has to be in a voice channel to be able to listen to music so if the member is in a voice channel.
         if (message.member.voiceChannel || message.member.voiceChannel != null) {
-            if (queue.length > 0 || isPlaying) {
-                getId(argsMusic, function (id) {
-                    add_to_queue(id, message);
-                    fetchVideoInfo(id, function (err, videoInfo) {
+
+            //If there is a song playing already or there are songs in the queue.
+            if (queue.length > 0 || isPlaying) { 
+                getId(argsMusic, function (id) { //Get the video with the command arguements (youtube link or name of the song).
+                    add_to_queue(id, message); //Add song to queue.
+                    fetchVideoInfo(id, function (err, videoInfo) { //Here we get the video title.
                         if (err) throw new Error(err);
-                        message.reply(" added to queue: **" + videoInfo.title + "**");
-                        queueNames.push(videoInfo.title);
+                        message.reply(" added to queue: **" + videoInfo.title + "**"); //Send message from the bot to the server displaying the song title.
+                        queueNames.push(videoInfo.title); //Push video title to queue.
                     });
                 });
-            } else {
-                isPlaying = true;
-                getId(argsMusic, function (id) {
+
+            //If there are no songs playing or on queue.
+            } else { 
+                isPlaying = true; //Song is playing.
+                getId(argsMusic, function (id) { //Get the youtube link.
                     queue.push(id);
                     playMusic(id, message);
-                    fetchVideoInfo(id, function (err, videoInfo) {
+                    fetchVideoInfo(id, function (err, videoInfo) { //Get youtube video title.
                         if (err) throw new Error(err);
                         queueNames.push(videoInfo.title);
-                        message.reply(" now playing: **" + videoInfo.title + "**");
+                        message.reply(" now playing: **" + videoInfo.title + "**"); //Send message of the song playing.
                     });
                 });
             }
+
+        //If the member that send the message with the command is not in a voicechannel.
         } else {
-            message.reply(" you need to be in a voice channel! :warning:");
+            message.reply(" you need to be in a voice channel! :warning:"); //Send a message as a warning.
         }
 
+    //If command is translate, you translate a text (Using Translate Amazon API).
     } else if (command == "translate") {
 
-        var tempCommand = message.content.replace(command, "");
-        var tempArgs1 = tempCommand.replace(args[0], "");
-        var tempArgs2 = tempArgs1.replace(args[1], "");
-        var text = tempArgs2.replace(config.prefix, "");
+        //Command format, example: !translate en es text.
+        var tempCommand = message.content.replace(command, "");//We eliminate the command so we get: en es.
+        var tempArgs1 = tempCommand.replace(args[0], "");//Get the message language: en.
+        var tempArgs2 = tempArgs1.replace(args[1], "");//Get the language that the text will be translated to: es.
+        var text = tempArgs2.replace(config.prefix, "");//Get the text that will be translated: text.
     
+        //Params for the Amazon Translate API.
         var params = {
             "Text": text,
             "SourceLanguageCode": args[0],
             "TargetLanguageCode": args[1]
         };
 
+        //Get the text translated from the response, send it as a message and if there is an error print error stack.
         translate.translateText(params, function (err, data) {
 
             if (err)
@@ -92,35 +105,45 @@ client.on('message', function (message) {
             }
         });
 
+    //If command is a meme, we use a S3 bucket to store the images.
     } else if (command == "meme") {
 
+        //Params for the S3 call.
         var params = {
-            Bucket: "memes-reromero",
+            Bucket: "", //Name of the bucket.
             MaxKeys: 100
         };
 
+        //Get the list of the objects stored in the S3 bucket.
         s3.listObjects(params, function (err, data) {
 
             if (err) console.log(err, err.stack);
             else {
 
+                //Random number generated from 0 to the number of images in the S3 bucket.
                 var randomIndex = Math.trunc(Math.random() * (data.Contents.length - 1));
+                //Get the random image and attach it to a discord message.
                 const attachment = new Discord.Attachment("https://s3.us-east-2.amazonaws.com/memes-reromero/" + data.Contents[randomIndex].Key);  
 
+                //Send message with the image attached.
                 message.reply(attachment);
             }
 
         });
+
+    //If command is skip, then skip song.
     } else if(command == "skip"){
 
         skip_song(message);
         message.reply(" skipping now!");
-
+    
+    //If command is queue, add song to queue.    
     } else if (command == "queue"){
 
+        //Format for response message:
         var message2 = "```";
         for (var i = 0; i < queueNames.length; i++) {
-            var temp = (i + 1) + ": " + queueNames[i] + (i === 0 ? "**(Current Song)**" : "") + "\n";
+            var temp = (i + 1) + ": " + queueNames[i] + (i === 0 ? "**(Current Song)**" : "") + "\n"; //The song that is playing right now.
             if ((message2 + temp).length <= 2000 - 3) {
                 message2 += temp;
             } else {
